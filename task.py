@@ -1,5 +1,5 @@
 
-import concurrent.futures
+
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -32,22 +32,16 @@ def add_data(route_dict, booking_token_list, json_response, use_date, key):
     return route_dict, booking_token_list
 
 
-def process(fly_to, fly_from, use_date):
+def process(query):
     """
     Отправляет запрос к точки API ,
     забирает данные о перелете,
     формирует json
 
-    :param str: fly_to
-    :param str: fly_from
-    :param int: day
+
+    :param str: query
     :return result
     """
-    endpoint_get_data = "https://api.skypicker.com/flights?"
-
-    query = endpoint_get_data + \
-        f"fly_from={fly_to}&fly_to={fly_from}&date_from={use_date}" + \
-        "&curr=KZT&adults=1&children=0&infants=0&partner=picky&v=3"
 
     result = None
     session = requests.Session()
@@ -63,6 +57,13 @@ def process(fly_to, fly_from, use_date):
         result = response.json()
     return result
 
+
+def thread_pool(process, query):
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        future = executor.submit(process, query)
+        json_response = future.result()
+
+    return json_response
 
 def get_data_from_api():
     """
@@ -88,9 +89,8 @@ def get_data_from_api():
 
     booking_token_list = []
     use_date = ''
-    result = None
     amount_of_days = 31
-    futures = []
+    endpoint_get_data = "https://api.skypicker.com/flights?"
     print('[INFO]: Start create request')
 
     for key in route_dict.keys():
@@ -98,20 +98,21 @@ def get_data_from_api():
         lst = key.split('-')
         fly_from = lst[0]
         fly_to = lst[1]
-        c = 0
+
         for day in range(amount_of_days + 1):
             use_date = (date.today() + timedelta(days=day)
                         ).strftime("%d/%m/%Y")
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                future = executor.submit(process, fly_to, fly_from, use_date)
-                # futures.append(future)
-                # for result_fut in concurrent.futures.as_completed(futures):
-                result = future.result()
-                if len(result['data']) == 0:
-                    continue
+            query = endpoint_get_data + \
+                f"fly_from={fly_to}&fly_to={fly_from}&date_from={use_date}" + \
+                "&curr=KZT&adults=1&children=0&infants=0&partner=picky&v=3"
 
-                route_dict, booking_token_list = add_data(
-                    route_dict, booking_token_list, result, use_date, key)
+            json_response = thread_pool(process, query)
+
+            if len(json_response['data']) == 0:
+                continue
+
+            route_dict, booking_token_list = add_data(
+                route_dict, booking_token_list, json_response, use_date, key)
 
     print('[INFO]: API connection. Success!')
     print('[INFO]: Finish create data')
@@ -124,7 +125,7 @@ def get_data_from_api():
 def create_cache(route_dict):
     """
     Записывает данные в табличном представлении .csv
-
+    сортирует по самому дешевому билету за месяц
     :param dict
     :return: None
     """
@@ -170,8 +171,9 @@ def check_valid_ticket(route_dict, booking_token_list):
             f"v=2&booking_token={token}" + \
             "&bnum=3&pnum=2&affily=picky_{market}&currency=KZT&adults=1&children=0&infants=0"
 
-        response = requests.get(query, headers)
-        json_response = response.json()
+
+        json_response = thread_pool(process,query)
+
         flights_checked = json_response['flights_checked']
         flights_invalid = json_response['flights_invalid']
         price_change = json_response['flights_checked']
