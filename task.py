@@ -2,7 +2,7 @@
 
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from datetime import date, timedelta
 from timeit import default_timer as timer
 
@@ -59,7 +59,7 @@ def process(query):
 
 
 def thread_pool(process, query):
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ProcessPoolExecutor() as executor:
         future = executor.submit(process, query)
         json_response = future.result()
 
