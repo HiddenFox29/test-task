@@ -205,10 +205,10 @@ def main():
     :return: None
     '''
 
-    data, booking_token_list = get_data_from_api()
+    route_dict, booking_token_list = get_data_from_api()
+    create_cache(route_dict)
     while True:
-        check_valid_ticket(data, booking_token_list)
-        time.sleep(1)
+        check_valid_ticket(route_dict, booking_token_list)
 
 
 main()
